@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.DS_Store
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.log
+.streamlit/secrets.toml
+
+# Training data CSVs are large — keep locally, don't commit
+mlb_training_data*.csv
+data/*.csv
+
+# Trained model files ARE committed (logistic regression joblib files are tiny)
+
+# Jupyter noise
+.ipynb_checkpoints/
+Untitled*.ipynb
