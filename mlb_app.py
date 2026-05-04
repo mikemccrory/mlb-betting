@@ -1262,7 +1262,7 @@ def render_player_table(projs: List[Dict], sel_game: str) -> str:
 </div>"""
 
 # ── Player modal ──────────────────────────────────────────────────────────────
-@st.dialog("", width="large")
+@st.dialog("Player Detail", width="large")
 def show_player_modal(player_name: str, projections: List[Dict]):
     p = next((x for x in projections if x["player"] == player_name), None)
     if not p:
