@@ -870,8 +870,8 @@ def compute_hit_prob(
         est_pa = max(2.8, min(5.0, AVG_PA_PER_GAME + (team_obp - LEAGUE_AVG_OBP) * 4))
 
     p_pa   = _sigmoid(z)
-    p_pa   = max(0.03, min(0.55, p_pa))   # loosened bounds — elite hitters can separate
-    p_game = round(max(0.04, 1 - (1 - p_pa) ** est_pa), 4)
+    p_pa   = max(0.03, min(0.35, p_pa))   # realistic: ~.350 is elite per-PA BA
+    p_game = round(max(0.04, min(0.88, 1 - (1 - p_pa) ** est_pa)), 4)
 
     contribs["_p_per_pa"] = round(p_pa, 4)
     contribs["_est_pa"]   = round(est_pa, 2)
@@ -960,8 +960,8 @@ def compute_hr_prob(
         est_pa = max(2.8, min(5.0, AVG_PA_PER_GAME + (team_obp - LEAGUE_AVG_OBP) * 4))
 
     p_pa   = _sigmoid(z)
-    p_pa   = max(0.002, min(0.18, p_pa))  # loosened ceiling; power hitters can reach ~57% game prob
-    p_game = round(max(0.002, 1 - (1 - p_pa) ** est_pa), 4)
+    p_pa   = max(0.002, min(0.065, p_pa)) # realistic: ~6.5% HR/PA for elite power hitter
+    p_game = round(max(0.002, min(0.26, 1 - (1 - p_pa) ** est_pa)), 4)
 
     contribs["_p_per_pa"] = round(p_pa, 4)
     contribs["_est_pa"]   = round(est_pa, 2)
@@ -1159,7 +1159,16 @@ def advanced_stats_chart(xstats: Dict, splits: Dict, pitcher_hand: str) -> go.Fi
 def game_log_chart(gl: List[Dict]) -> go.Figure:
     if not gl: return go.Figure()
     df = pd.DataFrame(gl[::-1])
-    df["label"] = df["date"].str[5:] + " " + df["opp"]
+    _MONTHS = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    def _lbl(row):
+        try:
+            parts = str(row["date"])[:10].split("-")
+            mon = _MONTHS[int(parts[1])]
+            day = str(int(parts[2]))
+            return f"{mon} {day} {row['opp']}"
+        except:
+            return str(row["date"])[5:] + " " + str(row["opp"])
+    df["label"] = df.apply(_lbl, axis=1)
     fig = go.Figure()
     fig.add_trace(go.Bar(name="Hits", x=df["label"], y=df["h"],
                          marker_color="#34d399", text=df["h"], textposition="outside"))
@@ -1168,7 +1177,7 @@ def game_log_chart(gl: List[Dict]) -> go.Figure:
     fig.update_layout(
         **DARK, height=220, margin=dict(l=0,r=0,t=10,b=55),
         barmode="group", legend=dict(font_color="#64748b"),
-        xaxis=dict(tickangle=-35, tickfont_size=10),
+        xaxis=dict(type="category", tickangle=-35, tickfont_size=10),
         yaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
     )
     return fig
@@ -1191,7 +1200,7 @@ def _pitcher_badge(hand):
     return (f'<span style="background:{c};color:{tc};font-size:10px;font-weight:700;'
             f'padding:1px 6px;border-radius:4px;white-space:nowrap">{lbl}</span>')
 
-def render_player_table(projs: List[Dict], sel_game: str) -> str:
+def render_player_table(projs: List[Dict], sel_game: str, sort_col: int = 3) -> str:
     def _plain(v, fmt=".3f"):
         if v is None: return '<span style="color:#94a3b8">—</span>'
         s = format(float(v), fmt)
@@ -1200,7 +1209,6 @@ def render_player_table(projs: List[Dict], sel_game: str) -> str:
     TR = ('style="border-bottom:1px solid #f1f5f9;cursor:pointer" '
           'onmouseover="this.style.background=\'#eff6ff\'" '
           'onmouseout="this.style.background=\'\'"')
-    TH = 'style="padding:9px 10px;white-space:nowrap;font-size:11px;letter-spacing:.04em;font-weight:600"'
 
     rows = []
     for p in projs:
@@ -1218,33 +1226,38 @@ def render_player_table(projs: List[Dict], sel_game: str) -> str:
 <td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hr'],'orange')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_season'),'blue')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_last10'),'orange')}</td>
-<td style="padding:10px 10px;text-align:right;color:#1e293b">{_plain(p.get('obp'))}</td>
-<td style="padding:10px 10px;text-align:right;color:#1e293b">{_plain(p.get('slg'))}</td>
-<td style="padding:10px 10px;text-align:center;color:#1e293b">{hr_yr}</td>
-<td style="padding:10px 10px;text-align:center;color:#1e293b">{hr_l10 if hr_l10 is not None else '<span style="color:#94a3b8">—</span>'}</td>
+<td style="padding:10px 10px;text-align:right;color:#475569">{_plain(p.get('obp'))}</td>
+<td style="padding:10px 10px;text-align:right;color:#475569">{_plain(p.get('slg'))}</td>
+<td style="padding:10px 10px;text-align:center;color:#475569">{hr_yr}</td>
+<td style="padding:10px 10px;text-align:center;color:#475569">{hr_l10 if hr_l10 is not None else '<span style="color:#94a3b8">—</span>'}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_left'),'blue')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_right'),'orange')}</td>
 </tr>""")
 
-    header_ths = [
-        ('left',  '#64748b', 'PLAYER NAME'),
-        ('left',  '#64748b', 'PLAYER TEAM'),
-        ('left',  '#64748b', 'VS PITCHER'),
-        ('right', '#22c55e', 'P(HIT) ↓'),
-        ('right', '#f97316', 'P(HR)'),
-        ('right', '#2563eb', 'BA THIS YEAR'),
-        ('right', '#f97316', 'BA LAST 10'),
-        ('right', '#64748b', 'OBP'),
-        ('right', '#64748b', 'SLG'),
-        ('center','#64748b', 'HR THIS YEAR'),
-        ('center','#64748b', 'HR LAST 10'),
-        ('right', '#2563eb', 'BA VS LEFT'),
-        ('right', '#f97316', 'BA VS RIGHT'),
+    # Header columns: (align, label)
+    header_cols = [
+        ('left',   'PLAYER NAME'),
+        ('left',   'PLAYER TEAM'),
+        ('left',   'VS PITCHER'),
+        ('right',  'P(HIT) ↓'),
+        ('right',  'P(HR)'),
+        ('right',  'BA THIS YEAR'),
+        ('right',  'BA LAST 10'),
+        ('right',  'OBP'),
+        ('right',  'SLG'),
+        ('center', 'HR THIS YEAR'),
+        ('center', 'HR LAST 10'),
+        ('right',  'BA VS LEFT'),
+        ('right',  'BA VS RIGHT'),
     ]
-    ths = "".join(
-        f'<th {TH} style="text-align:{a};color:{c}">{l}</th>'
-        for a,c,l in header_ths
-    )
+    TH_BASE = "padding:9px 10px;white-space:nowrap;font-size:11px;letter-spacing:.04em;font-weight:600;"
+    ths = ""
+    for i, (align, label) in enumerate(header_cols):
+        if i == sort_col:
+            bg = "background:#2563eb;color:#fff;"
+        else:
+            bg = "color:#94a3b8;"
+        ths += f'<th style="{TH_BASE}text-align:{align};{bg}">{label}</th>'
 
     return f"""
 <div style="background:white;border-radius:10px;overflow:hidden;
@@ -1255,7 +1268,7 @@ def render_player_table(projs: List[Dict], sel_game: str) -> str:
   </div>
   <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0">{ths}</tr></thead>
+      <thead><tr style="background:#1e293b">{ths}</tr></thead>
       <tbody>{''.join(rows)}</tbody>
     </table>
   </div>
@@ -1522,7 +1535,8 @@ def main():
     if hand_filter == "vs LHP": projs = [p for p in projs if p["pitcher_hand"]=="L"]
     if hand_filter == "vs RHP": projs = [p for p in projs if p["pitcher_hand"]=="R"]
 
-    sort_map = {"P(Hit)":"p_hit","P(HR)":"p_hr","Player Name":"player"}
+    sort_map     = {"P(Hit)":"p_hit","P(HR)":"p_hr","Player Name":"player"}
+    sort_col_map = {"P(Hit)": 3,    "P(HR)": 4,    "Player Name": 0}
     projs = sorted(projs, key=lambda x: x.get(sort_map[sort_opt],0), reverse=(sort_opt!="Player Name"))
 
     if not projs:
@@ -1532,7 +1546,7 @@ def main():
 
     # ── Player table (custom HTML) ────────────────────────────────────────────
     st.caption("◦ = roster fallback · lineup not yet confirmed · click player name to open detail")
-    st.markdown(render_player_table(projs, sel_game), unsafe_allow_html=True)
+    st.markdown(render_player_table(projs, sel_game, sort_col=sort_col_map[sort_opt]), unsafe_allow_html=True)
 
     # ── Player modal — triggered by ?player=NAME query param ──────────────────
     sel_player = st.query_params.get("player", "")
