@@ -38,71 +38,199 @@ st.set_page_config(
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  /* ── Base (desktop + mobile) ─────────────────────────────── */
-  [data-testid="stAppViewContainer"] { background:#0f172a; }
-  [data-testid="stHeader"]           { background:transparent; }
-  h1,h2,h3,h4 { color:#f1f5f9 !important; }
+  /* ── Light theme base ──────────────────────────────────────── */
+  [data-testid="stAppViewContainer"] { background:#eef2f7; }
+  [data-testid="stHeader"]           { background:transparent; display:none; }
+  [data-testid="stToolbar"]          { display:none; }
+  h1,h2,h3,h4 { color:#1e293b !important; }
 
-  .stTabs [data-baseweb="tab"] {
-    background:#1e293b; border-radius:8px; color:#94a3b8;
-    padding:6px 14px; border:1px solid #334155;
+  /* Remove default streamlit top padding so nav sits flush */
+  .block-container {
+    padding-top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 2rem !important;
+    max-width: 100% !important;
   }
-  .stTabs [aria-selected="true"] {
-    background:#2563eb !important; color:#fff !important; border-color:#2563eb !important;
+
+  /* ── Nav bar ────────────────────────────────────────────────── */
+  .mlb-nav {
+    background: #1d3461;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    height: 52px;
+    gap: 0;
+    position: sticky;
+    top: 0;
+    z-index: 999;
   }
-  /* Scrollable tab list so all tabs fit on narrow screens */
+  .mlb-nav-links { display: flex; gap: 4px; }
+  .mlb-nav-links a {
+    color: rgba(255,255,255,.75);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 6px;
+    letter-spacing: .04em;
+    transition: background .15s, color .15s;
+  }
+  .mlb-nav-links a.active,
+  .mlb-nav-links a:hover { background: rgba(255,255,255,.15); color: #fff; }
+  .mlb-nav-brand {
+    flex: 1;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 800;
+    color: #fbbf24;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  .mlb-nav-search {
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 20px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: rgba(255,255,255,.5);
+    font-size: 12px;
+    min-width: 180px;
+    cursor: text;
+  }
+  @media (max-width: 640px) {
+    .mlb-nav-links { display: none; }
+    .mlb-nav-search { min-width: 120px; font-size: 11px; }
+    .mlb-nav-brand { font-size: 14px; }
+  }
+
+  /* ── Game filter bar ────────────────────────────────────────── */
+  .game-bar {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .game-bar::-webkit-scrollbar { height: 3px; }
+  .game-bar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+  .gb-all {
+    flex-shrink: 0;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: .05em;
+    white-space: nowrap;
+  }
+  .gb-all.inactive {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+
+  .game-card {
+    flex-shrink: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 7px 10px;
+    text-decoration: none;
+    color: #1e293b;
+    min-width: 72px;
+    transition: border-color .15s, box-shadow .15s;
+    line-height: 1.4;
+  }
+  .game-card:hover { border-color: #93c5fd; }
+  .game-card.active {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px #2563eb;
+    background: #eff6ff;
+  }
+  .gc-status { font-size: 9px; color: #94a3b8; font-weight: 700; letter-spacing:.05em; }
+  .gc-live   { font-size: 9px; color: #ef4444; font-weight: 700; letter-spacing:.05em; }
+  .gc-row    { font-size: 12px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+
+  /* ── Content wrapper (adds side padding back) ────────────────── */
+  .content-pad { padding: 16px 20px; }
+
+  /* ── Metric cards ───────────────────────────────────────────── */
+  div[data-testid="metric-container"] {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  [data-testid="metric-container"] label { color: #64748b !important; font-size: 12px !important; }
+  [data-testid="metric-container"] [data-testid="stMetricValue"] { color: #1e293b !important; }
+
+  /* ── Tabs ───────────────────────────────────────────────────── */
   .stTabs [data-baseweb="tab-list"] {
     overflow-x: auto; flex-wrap: nowrap; gap: 6px;
     -webkit-overflow-scrolling: touch;
+    background: transparent !important;
+  }
+  .stTabs [data-baseweb="tab"] {
+    background: white; border-radius: 8px; color: #64748b;
+    padding: 6px 14px; border: 1px solid #e2e8f0;
+    font-size: 13px;
+  }
+  .stTabs [aria-selected="true"] {
+    background: #2563eb !important; color: #fff !important;
+    border-color: #2563eb !important;
   }
 
-  div[data-testid="metric-container"] {
-    background:#1e293b; border:1px solid #334155; border-radius:10px; padding:12px 16px;
-  }
-
+  /* ── Buttons ────────────────────────────────────────────────── */
   .stButton>button {
-    background:#1e293b; color:#e2e8f0; border:1px solid #334155;
-    border-radius:8px; padding:6px 12px; font-size:13px; line-height:1.5;
-    white-space:pre-line; min-height:40px; touch-action:manipulation;
+    background: white; color: #374151; border: 1px solid #e2e8f0;
+    border-radius: 8px; padding: 6px 14px; font-size: 13px;
+    min-height: 40px; touch-action: manipulation;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
   }
-  .stButton>button:hover { background:#2563eb; border-color:#2563eb; color:#fff; }
-  .stButton>button[kind="primary"] { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .stButton>button:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .stButton>button[kind="primary"] { background: #2563eb; border-color: #2563eb; color: #fff; }
 
-  label { color:#94a3b8 !important; }
-  .stSelectbox>div>div  { background:#1e293b !important; color:#e2e8f0 !important; border-color:#334155 !important; }
-  .stTextInput>div>div  { background:#1e293b !important; color:#e2e8f0 !important; border-color:#334155 !important; }
-  .stMultiSelect>div>div{ background:#1e293b !important; color:#e2e8f0 !important; border-color:#334155 !important; }
-  [data-testid="stDataFrame"] { border-radius:10px; overflow:hidden; }
+  /* ── Form controls ──────────────────────────────────────────── */
+  label { color: #64748b !important; }
+  .stSelectbox>div>div   { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
+  .stTextInput>div>div   { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
+  .stMultiSelect>div>div { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
 
-  /* Make the main block padding tighter on all screens */
-  .block-container { padding-top: 1rem !important; padding-bottom: 2rem !important; }
+  /* ── Data table ─────────────────────────────────────────────── */
+  [data-testid="stDataFrame"] {
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
 
-  /* ── Mobile overrides (≤ 640 px) ─────────────────────────── */
+  /* ── Alert / info banners ───────────────────────────────────── */
+  [data-testid="stAlert"] { border-radius: 8px; }
+
+  /* ── Mobile overrides (≤ 640 px) ───────────────────────────── */
   @media screen and (max-width: 640px) {
-    /* Tighten horizontal padding */
-    .block-container { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+    .content-pad { padding: 12px 12px; }
 
-    /* Wrap all column blocks so they stack */
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 0.5rem 0 !important; }
-
-    /* Each column: full width by default … */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .5rem 0 !important; }
     [data-testid="column"] { min-width: 100% !important; }
 
-    /* … except the title/refresh row — keep button inline (shrink it) */
-    [data-testid="stHorizontalBlock"]:has(h1) [data-testid="column"] {
-      min-width: unset !important;
-    }
-
-    /* Metric grid: 2-up instead of 4-up */
-    div[data-testid="metric-container"] {
-      padding: 8px 10px !important;
-    }
+    /* Metric 2-up */
+    div[data-testid="metric-container"] { padding: 8px 10px !important; }
     [data-testid="stHorizontalBlock"]:has([data-testid="metric-container"]) [data-testid="column"] {
-      min-width: calc(50% - 0.25rem) !important;
-      flex: 1 1 calc(50% - 0.25rem) !important;
+      min-width: calc(50% - .25rem) !important;
+      flex: 1 1 calc(50% - .25rem) !important;
     }
 
-    /* Filters: stack selectbox + input vertically */
+    /* Filter controls stack */
     [data-testid="stHorizontalBlock"]:has(.stSelectbox) [data-testid="column"],
     [data-testid="stHorizontalBlock"]:has(.stTextInput)  [data-testid="column"] {
       min-width: 100% !important;
@@ -917,7 +1045,7 @@ def run_analysis(date_str: str) -> Dict:
             "model_info": model_info}
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
-DARK = dict(paper_bgcolor="#1e293b", plot_bgcolor="#0f172a", font_color="#94a3b8")
+DARK = dict(paper_bgcolor="white", plot_bgcolor="#f8fafc", font_color="#334155")
 
 def waterfall_chart(contribs: Dict, title: str) -> go.Figure:
     items = {k:v for k,v in contribs.items()
@@ -937,7 +1065,7 @@ def waterfall_chart(contribs: Dict, title: str) -> go.Figure:
         **DARK, title_text=title, title_font_color="#64748b", title_font_size=12,
         height=max(200, 32*len(labels)+60),
         margin=dict(l=10, r=70, t=36, b=10),
-        xaxis=dict(showgrid=True, gridcolor="#334155", zeroline=True, zerolinecolor="#475569"),
+        xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zeroline=True, zerolinecolor="#94a3b8"),
         yaxis=dict(showgrid=False, automargin=True),
     )
     return fig
@@ -974,8 +1102,8 @@ def advanced_stats_chart(xstats: Dict, splits: Dict, pitcher_hand: str) -> go.Fi
     ))
     fig.update_layout(
         **DARK, height=260, margin=dict(l=0,r=0,t=10,b=0),
-        barmode="group", legend=dict(font_color="#94a3b8"),
-        yaxis=dict(showgrid=True, gridcolor="#334155"),
+        barmode="group", legend=dict(font_color="#64748b"),
+        yaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
     )
     return fig
 
@@ -990,9 +1118,9 @@ def game_log_chart(gl: List[Dict]) -> go.Figure:
                          marker_color="#f97316", text=df["hr"], textposition="outside"))
     fig.update_layout(
         **DARK, height=220, margin=dict(l=0,r=0,t=10,b=55),
-        barmode="group", legend=dict(font_color="#94a3b8"),
+        barmode="group", legend=dict(font_color="#64748b"),
         xaxis=dict(tickangle=-35, tickfont_size=10),
-        yaxis=dict(showgrid=True, gridcolor="#334155"),
+        yaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
     )
     return fig
 
@@ -1107,95 +1235,112 @@ def show_player_modal(player_name: str, projections: List[Dict]):
         st.plotly_chart(waterfall_chart(hrc, "HR Probability Drivers"),
                         use_container_width=True, config={"displayModeBar":False})
 
+# ── Game filter bar HTML ──────────────────────────────────────────────────────
+def _game_bar_html(live_games: List[Dict], sel: str) -> str:
+    all_cls = "gb-all" if sel == "all" else "gb-all inactive"
+    html = f'<div class="game-bar"><a href="?game=all" class="{all_cls}">ALL GAMES</a>'
+    for g in live_games:
+        ha = g["away_abbrev"]; hh = g["home_abbrev"]
+        gid = str(g["game_id"])
+        active = "active" if sel == gid else ""
+        if g["state"] == "Live":
+            ih    = "▲" if "top" in g.get("inning_half","").lower() else "▼"
+            status = f'<div class="gc-live">LIVE {ih}{g["inning"]}</div>'
+            r1     = f'{g["away_score"]} {ha}'
+            r2     = f'{g["home_score"]} {hh}'
+        elif g["state"] == "Final":
+            status = '<div class="gc-status">FINAL</div>'
+            r1     = f'{g["away_score"]} {ha}'
+            r2     = f'{g["home_score"]} {hh}'
+        else:
+            try:
+                gt  = datetime.fromisoformat(g["game_time"].replace("Z","+00:00"))
+                sub = gt.astimezone().strftime("%-I:%M %p")
+            except:
+                sub = "TBD"
+            status = f'<div class="gc-status">{sub}</div>'
+            r1     = ha; r2 = hh
+        html += (f'<a href="?game={gid}" class="game-card {active}">'
+                 f'{status}'
+                 f'<div class="gc-row">{r1}</div>'
+                 f'<div class="gc-row">{r2}</div>'
+                 f'</a>')
+    html += "</div>"
+    return html
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 def main():
-    col_t, col_r = st.columns([7,1])
-    with col_t:
-        st.title("⚾ MLB Hit & HR Probability Finder")
-    with col_r:
-        st.write("")
-        if st.button("↻ Refresh"):
-            st.cache_data.clear(); st.rerun()
+    date_str = today()
 
-    date_str  = today()
-    year      = date.today().year
+    # ── Nav bar ───────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="mlb-nav">
+      <nav class="mlb-nav-links">
+        <a class="active" href="#">HOME</a>
+        <a href="#">NEWS</a>
+        <a href="#">CONTACT</a>
+      </nav>
+      <div class="mlb-nav-brand">⚾ BET FINDER</div>
+      <div class="mlb-nav-search">
+        <span>🔍</span><span>SEARCH PLAYER NAME</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Game filter bar ────────────────────────────────────────────────────────
+    # ── Game filter bar (HTML cards → ?game= query param) ─────────────────────
     live_games = get_live_scores(date_str)
-    selected_ids: set = set()
-
+    sel_game   = st.query_params.get("game", "all")
     if live_games:
-        # Build label → game_id map
-        game_options: Dict[str, int] = {}
-        for g in live_games:
-            ha = g["away_abbrev"]; hh = g["home_abbrev"]
-            if g["state"] == "Live":
-                ih = "▲" if "top" in g.get("inning_half","").lower() else "▼"
-                lbl = f"🔴 {ha} {g['away_score']}–{g['home_score']} {hh}  {ih}{g['inning']}"
-            elif g["state"] == "Final":
-                lbl = f"✓ {ha} {g['away_score']}–{g['home_score']} {hh}  Final"
-            else:
-                try:
-                    gt    = datetime.fromisoformat(g["game_time"].replace("Z","+00:00"))
-                    local = gt.astimezone()
-                    sub   = local.strftime("%-I:%M %p")
-                except:
-                    sub = "TBD"
-                lbl = f"{ha} @ {hh}  {sub}"
-            game_options[lbl] = g["game_id"]
+        st.markdown(_game_bar_html(live_games, sel_game), unsafe_allow_html=True)
 
-        selected_labels = st.multiselect(
-            "Filter by game (leave empty for all)",
-            options=list(game_options.keys()),
-            placeholder="All games — tap to filter…",
-        )
-        selected_ids = {game_options[l] for l in selected_labels}
-
-    st.divider()
+    # ── Content padding wrapper ───────────────────────────────────────────────
+    st.markdown('<div class="content-pad">', unsafe_allow_html=True)
 
     # ── Load analysis ─────────────────────────────────────────────────────────
-    with st.spinner("Loading lineups · Savant data · Pitcher stats… (first load ~60 s)"):
-        data  = run_analysis(date_str)
+    with st.spinner("Fetching lineups & calculating probabilities…\n*First load takes 30–60 s*"):
+        data = run_analysis(date_str)
 
     projs = data["projections"]
     if not projs:
         st.error("No games or player data found. Check your connection.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    if selected_ids:
-        projs = [p for p in projs if p["game_id"] in selected_ids]
+    # Filter by selected game card
+    if sel_game != "all":
+        projs = [p for p in projs if str(p["game_id"]) == sel_game]
 
     # ── Model badge ───────────────────────────────────────────────────────────
     model_type = data.get("model", "rule-based")
     minfo      = data.get("model_info") or {}
     if model_type == "ml":
-        trained_date = minfo.get("trained_date", "")[:10]
-        hit_auc = minfo.get("hit_metrics", {}).get("roc_auc", "—")
-        hr_auc  = minfo.get("hr_metrics",  {}).get("roc_auc", "—")
-        st.success(
-            f"**ML model active** (trained {trained_date}) · "
-            f"Hit AUC {hit_auc} · HR AUC {hr_auc}",
-            icon="🤖",
-        )
+        trained_date = minfo.get("trained_date","")[:10]
+        hit_auc = minfo.get("hit_metrics",{}).get("roc_auc","—")
+        hr_auc  = minfo.get("hr_metrics", {}).get("roc_auc","—")
+        st.success(f"**ML model active** (trained {trained_date}) · Hit AUC {hit_auc} · HR AUC {hr_auc}", icon="🤖")
     else:
-        st.info("Rule-based model active. Run `mlb_data_collector.py` then `mlb_train_model.py` to enable the ML model.", icon="📐")
+        st.info("Rule-based model · Collect data + train to enable ML model.", icon="📐")
 
     # ── Summary metrics ────────────────────────────────────────────────────────
     best_hit = max(projs, key=lambda x: x["p_hit"]) if projs else None
     best_hr  = max(projs, key=lambda x: x["p_hr"])  if projs else None
-    m1,m2,m3,m4 = st.columns(4)
-    m1.metric("Players Analyzed", len(projs))
-    m2.metric("Best P(Hit)",  f"{best_hit['p_hit']*100:.1f}%  {best_hit['player']}" if best_hit else "—")
-    m3.metric("Best P(HR)",   f"{best_hr['p_hr']*100:.1f}%  {best_hr['player']}"   if best_hr  else "—")
-    m4.metric("Games",        len({p["game_id"] for p in projs}))
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Players", len(projs))
+    m2.metric("Best P(Hit)", f"{best_hit['p_hit']*100:.1f}%  {best_hit['player']}" if best_hit else "—")
+    m3.metric("Best P(HR)",  f"{best_hr['p_hr']*100:.1f}%  {best_hr['player']}"   if best_hr  else "—")
+    m4.metric("Games", len({p["game_id"] for p in projs}))
 
-    st.divider()
+    st.write("")
 
-    # ── Filters ────────────────────────────────────────────────────────────────
-    fc1, fc2, fc3 = st.columns([2,2,2])
+    # ── Filters + refresh ─────────────────────────────────────────────────────
+    fc1, fc2, fc3, fc4 = st.columns([2, 2, 2, 1])
     sort_opt    = fc1.selectbox("Sort by", ["P(Hit)","P(HR)","Player Name"])
     search      = fc2.text_input("Search player / team", placeholder="Judge, Yankees…")
     hand_filter = fc3.selectbox("Pitcher hand", ["All","vs LHP","vs RHP"])
+    fc4.write("")
+    with fc4:
+        if st.button("↻ Refresh", use_container_width=True):
+            st.cache_data.clear(); st.rerun()
 
     if search:
         q = search.lower()
@@ -1204,15 +1349,15 @@ def main():
     if hand_filter == "vs RHP": projs = [p for p in projs if p["pitcher_hand"]=="R"]
 
     sort_map = {"P(Hit)":"p_hit","P(HR)":"p_hr","Player Name":"player"}
-    rev = sort_opt != "Player Name"
-    projs = sorted(projs, key=lambda x: x.get(sort_map[sort_opt], 0), reverse=rev)
+    projs = sorted(projs, key=lambda x: x.get(sort_map[sort_opt],0), reverse=(sort_opt!="Player Name"))
 
     if not projs:
-        st.info("No players match filters.")
+        st.info("No players match the current filters.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     # ── Player table ───────────────────────────────────────────────────────────
-    st.caption("◦ = roster fallback (lineup not yet confirmed)")
+    st.caption("◦ = roster fallback · lineup not yet confirmed")
     rows = []
     for p in projs:
         xs    = p.get("xstats",{})
@@ -1223,46 +1368,48 @@ def main():
         def _sp(k, fmt=".3f"):
             v = _safe_float(split, k)
             return format(v, fmt) if v is not None else "—"
-        hl = "⬅L" if p["pitcher_hand"]=="L" else "➡R"
+        hl  = "L" if p["pitcher_hand"]=="L" else "R"
+        spot = p.get("lineup_spot",0)
         rows.append({
+            "#":           spot if spot else "—",
             "Player":      p["player"] + ("" if p.get("confirmed") else " ◦"),
             "Team":        TEAM_ABBREV.get(p["team"], p["team"][:3]),
-            "vs Pitcher":  f"{p['pitcher'][:16]} ({hl})",
+            "vs Pitcher":  f"{p['pitcher'][:18]} ({hl})",
             "P(Hit)":      f"{p['p_hit']*100:.1f}%",
             "P(HR)":       f"{p['p_hr']*100:.1f}%",
             "BA split":    _sp("avg"),
             "xBA":         _xs("xba"),
             "xSLG":        _xs("xslg"),
-            "Venue":       p["venue"][:22],
+            "Venue":       p["venue"][:20],
             "Key Factors": top_factors(p["hit_contributions"], p["hr_contributions"]),
         })
 
-    df_t = pd.DataFrame(rows)
     st.dataframe(
-        df_t,
+        pd.DataFrame(rows),
         use_container_width=True,
         hide_index=True,
         height=min(700, 40 + 52 * len(rows)),
         column_config={
-            "Key Factors": st.column_config.TextColumn(
-                "Key Factors", width="large",
-            ),
+            "#":           st.column_config.TextColumn("#", width="small"),
+            "Key Factors": st.column_config.TextColumn("Key Factors", width="large"),
         },
     )
 
     # ── Player detail modal ────────────────────────────────────────────────────
-    st.divider()
-    all_names = [p["player"] for p in projs]
-    col_sel, col_btn = st.columns([4, 1])
+    st.write("")
+    col_sel, col_btn = st.columns([5, 1])
     with col_sel:
-        sel = st.selectbox("Select a player for detailed breakdown", ["— select —"]+all_names)
+        sel = st.selectbox("Select a player for detailed breakdown",
+                           ["— select —"] + [p["player"] for p in projs])
     with col_btn:
-        st.write("")
-        st.write("")
-        open_modal = st.button("View Detail", type="primary", disabled=(sel=="— select —"))
+        st.write(""); st.write("")
+        open_modal = st.button("View Detail", type="primary", disabled=(sel=="— select —"),
+                               use_container_width=True)
 
     if open_modal and sel != "— select —":
         show_player_modal(sel, data["projections"])
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
