@@ -13,6 +13,7 @@ import json
 import math
 import time
 import logging
+import urllib.parse
 from io import StringIO
 from pathlib import Path
 from datetime import date, datetime, timezone
@@ -418,6 +419,23 @@ def _temp_hr_adj(f: float) -> float:
     if f < 68: return -0.03
     if f <= 85: return 0.0
     return 0.06
+
+def _p_tb_2plus(slg: float, est_pa: float) -> float:
+    """P(2.5+ total bases in game) — Poisson approx on expected TB per game."""
+    lam = max(0.001, slg * est_pa)
+    p_le_2 = math.exp(-lam) * (1 + lam + lam ** 2 / 2)
+    return round(max(0.001, min(0.99, 1 - p_le_2)), 4)
+
+def _p_rbi(p_hit: float, p_hr: float, team_obp: float) -> float:
+    """Rough P(at least 1 RBI in game)."""
+    p_via_hr  = p_hr                           # HR always = RBI
+    p_via_hit = p_hit * (1-(1-team_obp)**2) * 0.35
+    return round(max(0.01, min(0.55, 1-(1-p_via_hr)*(1-p_via_hit))), 4)
+
+def _photo_url(player_id: int) -> str:
+    return (f"https://img.mlbstatic.com/mlb-photos/image/upload/"
+            f"d_people:generic:headshot:67:current.png/w_213,q_auto:best/"
+            f"v1/people/{player_id}/headshot/67/current")
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
 def _get(url: str, params=None, timeout=15) -> requests.Response:
@@ -993,7 +1011,7 @@ def run_analysis(date_str: str) -> Dict:
                 lineup_spot = lineup_idx + 1 if player.get("confirmed") else 0
 
                 splits = get_player_splits(pid, year)
-                gl     = get_player_game_log(pid, year, 10)
+                gl     = get_player_game_log(pid, year, 20)
                 time.sleep(0.02)
 
                 xstats: Dict = {}
@@ -1016,7 +1034,27 @@ def run_analysis(date_str: str) -> Dict:
                     p_hit, hit_c = compute_hit_prob(splits, p_hand, gl, venue, p_stats, xstats, team_obp, temp_f, lineup_spot)
                     p_hr,  hr_c  = compute_hr_prob( splits, p_hand, gl, venue, p_stats, xstats, team_obp, temp_f, lineup_spot)
 
+                # ── Derived stats for table display ───────────────────────
+                vl = splits.get("vl", {}); vr = splits.get("vr", {})
+                gl10 = gl[:10]
+                ab10 = sum(g["ab"] for g in gl10); h10 = sum(g["h"] for g in gl10)
+                hr10 = sum(g["hr"] for g in gl10)
+                ba_last10 = round(h10/ab10, 3) if ab10 >= 5 else None
+
+                obp_season = (_safe_float(xstats,"obp")
+                              or _safe_float(vl,"obp") or _safe_float(vr,"obp"))
+                slg_season = (_safe_float(xstats,"slg")
+                              or _safe_float(vl,"slg") or _safe_float(vr,"slg"))
+                ba_season  = (_safe_float(xstats,"ba")
+                              or _safe_float(vl,"avg") or _safe_float(vr,"avg"))
+                hr_yr      = int(vl.get("hr",0) or 0) + int(vr.get("hr",0) or 0)
+
+                est_pa  = float(LINEUP_SPOT_PA.get(lineup_spot, AVG_PA_PER_GAME))
+                p_tb    = _p_tb_2plus(slg_season or 0.380, est_pa)
+                p_rbi_v = _p_rbi(p_hit, p_hr, team_obp)
+
                 projections.append({
+                    "player_id":      pid,
                     "player":         name,
                     "team":           team_nm,
                     "game_id":        game["game_id"],
@@ -1028,6 +1066,8 @@ def run_analysis(date_str: str) -> Dict:
                     "pitcher_stats":  p_stats,
                     "p_hit":          p_hit,
                     "p_hr":           p_hr,
+                    "p_tb":           p_tb,
+                    "p_rbi":          p_rbi_v,
                     "hit_contributions": hit_c,
                     "hr_contributions":  hr_c,
                     "xstats":         xstats,
@@ -1037,6 +1077,15 @@ def run_analysis(date_str: str) -> Dict:
                     "weather":        weather,
                     "team_obp":       team_obp,
                     "lineup_spot":    lineup_spot,
+                    # table display stats
+                    "ba_season":      ba_season,
+                    "ba_last10":      ba_last10,
+                    "hr_this_year":   hr_yr,
+                    "hr_last10":      hr10 if ab10 >= 5 else None,
+                    "obp":            obp_season,
+                    "slg":            slg_season,
+                    "ba_vs_left":     _safe_float(vl, "avg"),
+                    "ba_vs_right":    _safe_float(vr, "avg"),
                 })
 
     projections.sort(key=lambda x: x["p_hit"], reverse=True)
@@ -1124,112 +1173,237 @@ def game_log_chart(gl: List[Dict]) -> go.Figure:
     )
     return fig
 
+# ── Player table HTML ─────────────────────────────────────────────────────────
+def _fmt_ba(v, color="blue"):
+    if v is None: return '<span style="color:#94a3b8">—</span>'
+    c = "#2563eb" if color=="blue" else "#f97316"
+    return f'<span style="color:{c};font-weight:600">.{str(round(v,3))[2:].ljust(3,"0")}</span>'
+
+def _fmt_pct(v, color):
+    if v is None: return "—"
+    c = {"green":"#22c55e","orange":"#f97316","purple":"#a855f7"}.get(color,"#1e293b")
+    return f'<span style="color:{c};font-weight:700">{v*100:.1f}%</span>'
+
+def _pitcher_badge(hand):
+    c = "#fff3cd" if hand=="R" else "#cfe2ff"
+    tc= "#b45309" if hand=="R" else "#1d4ed8"
+    lbl = "RHP" if hand=="R" else "LHP"
+    return (f'<span style="background:{c};color:{tc};font-size:10px;font-weight:700;'
+            f'padding:1px 6px;border-radius:4px;white-space:nowrap">{lbl}</span>')
+
+def render_player_table(projs: List[Dict], sel_game: str) -> str:
+    def _plain(v, fmt=".3f"):
+        if v is None: return '<span style="color:#94a3b8">—</span>'
+        s = format(float(v), fmt)
+        return s.lstrip("0") or "0"
+
+    TR = ('style="border-bottom:1px solid #f1f5f9;cursor:pointer" '
+          'onmouseover="this.style.background=\'#eff6ff\'" '
+          'onmouseout="this.style.background=\'\'"')
+    TH = 'style="padding:9px 10px;white-space:nowrap;font-size:11px;letter-spacing:.04em;font-weight:600"'
+
+    rows = []
+    for p in projs:
+        enc   = urllib.parse.quote_plus(p["player"])
+        link  = f"?game={sel_game}&player={enc}"
+        conf  = "" if p.get("confirmed") else " <span style='color:#94a3b8;font-size:10px'>◦</span>"
+        badge = _pitcher_badge(p["pitcher_hand"])
+        hr_yr  = p.get("hr_this_year","—")
+        hr_l10 = p.get("hr_last10")
+        rows.append(f"""<tr {TR}>
+<td style="padding:10px 10px"><a href="{link}" style="color:#2563eb;font-weight:700;text-decoration:none">{p['player']}</a>{conf}</td>
+<td style="padding:10px 10px;color:#475569">{p['team']}</td>
+<td style="padding:10px 10px">{p['pitcher'][:22]}<br>{badge}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hit'],'green')}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hr'],'orange')}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_season'),'blue')}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_last10'),'orange')}</td>
+<td style="padding:10px 10px;text-align:right;color:#1e293b">{_plain(p.get('obp'))}</td>
+<td style="padding:10px 10px;text-align:right;color:#1e293b">{_plain(p.get('slg'))}</td>
+<td style="padding:10px 10px;text-align:center;color:#1e293b">{hr_yr}</td>
+<td style="padding:10px 10px;text-align:center;color:#1e293b">{hr_l10 if hr_l10 is not None else '<span style="color:#94a3b8">—</span>'}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_left'),'blue')}</td>
+<td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_right'),'orange')}</td>
+</tr>""")
+
+    header_ths = [
+        ('left',  '#64748b', 'PLAYER NAME'),
+        ('left',  '#64748b', 'PLAYER TEAM'),
+        ('left',  '#64748b', 'VS PITCHER'),
+        ('right', '#22c55e', 'P(HIT) ↓'),
+        ('right', '#f97316', 'P(HR)'),
+        ('right', '#2563eb', 'BA THIS YEAR'),
+        ('right', '#f97316', 'BA LAST 10'),
+        ('right', '#64748b', 'OBP'),
+        ('right', '#64748b', 'SLG'),
+        ('center','#64748b', 'HR THIS YEAR'),
+        ('center','#64748b', 'HR LAST 10'),
+        ('right', '#2563eb', 'BA VS LEFT'),
+        ('right', '#f97316', 'BA VS RIGHT'),
+    ]
+    ths = "".join(
+        f'<th {TH} style="text-align:{a};color:{c}">{l}</th>'
+        for a,c,l in header_ths
+    )
+
+    return f"""
+<div style="background:white;border-radius:10px;overflow:hidden;
+            box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:12px">
+  <div style="background:#2563eb;color:white;font-size:11px;font-weight:700;
+              padding:10px 14px;letter-spacing:.06em">
+    TABLE OF PLAYERS &mdash; DEFAULT SORT: PROBABILITY OF HIT
+  </div>
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0">{ths}</tr></thead>
+      <tbody>{''.join(rows)}</tbody>
+    </table>
+  </div>
+</div>"""
+
 # ── Player modal ──────────────────────────────────────────────────────────────
-@st.dialog("Player Detail", width="large")
+@st.dialog("", width="large")
 def show_player_modal(player_name: str, projections: List[Dict]):
     p = next((x for x in projections if x["player"] == player_name), None)
     if not p:
-        st.error("Player not found.")
-        return
+        st.error("Player not found."); return
 
-    abbrev    = TEAM_ABBREV.get(p["team"], p["team"][:3])
-    hand_lbl  = "⬅ LHP" if p["pitcher_hand"]=="L" else "➡ RHP"
-    spot      = p.get("lineup_spot", 0)
-    spot_lbl  = f" · Bat #{spot}" if spot else ""
-    st.markdown(f"## {p['player']}")
-    st.caption(f"**{abbrev}** · vs **{p['pitcher']}** ({hand_lbl}) · {p['venue']}{spot_lbl}")
+    hand_lbl = "RHP" if p["pitcher_hand"]=="R" else "LHP"
+    photo    = _photo_url(p.get("player_id", 0))
 
-    w = p.get("weather",{})
-    if w.get("available"):
-        st.caption(f"🌡 {w['temp_f']}°F · 💨 {w['wind_mph']} mph {w.get('wind_dir','')} · {w.get('condition','')}")
+    # ── Header ────────────────────────────────────────────────────────────────
+    st.markdown(f"""
+<div style="background:#2563eb;color:white;border-radius:8px 8px 0 0;
+            padding:16px 20px;margin:-1rem -1rem 0 -1rem">
+  <div style="font-size:22px;font-weight:800">{p['player']}</div>
+  <div style="font-size:13px;opacity:.8;margin-top:3px">
+    {p['team']} &nbsp;·&nbsp; vs {p['pitcher']} ({hand_lbl}) &nbsp;·&nbsp; {p['venue']}
+  </div>
+</div>""", unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("P(Hit in Game)", f"{p['p_hit']*100:.1f}%")
-    c2.metric("P(HR in Game)",  f"{p['p_hr']*100:.1f}%")
-    spot   = p.get("lineup_spot", 0)
-    est_pa = LINEUP_SPOT_PA.get(spot, p["hit_contributions"].get("_est_pa", 3.8))
-    spot_s = f" (#{spot})" if spot else ""
-    c3.metric("Est. PA Today",  f"{est_pa:.1f}{spot_s}")
+    # ── 4 Probability metrics ─────────────────────────────────────────────────
+    st.markdown(f"""
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+            border:1px solid #e2e8f0;border-top:none;border-radius:0 0 0 0">
+  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
+    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(HIT)</div>
+    <div style="font-size:26px;font-weight:800;color:#22c55e">{p['p_hit']*100:.1f}%</div>
+  </div>
+  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
+    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(HR)</div>
+    <div style="font-size:26px;font-weight:800;color:#f97316">{p['p_hr']*100:.1f}%</div>
+  </div>
+  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
+    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(TB 2.5+)</div>
+    <div style="font-size:26px;font-weight:800;color:#a855f7">{p.get('p_tb',0)*100:.1f}%</div>
+  </div>
+  <div style="padding:14px 16px;text-align:center">
+    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(RBI)</div>
+    <div style="font-size:26px;font-weight:800;color:#f97316">{p.get('p_rbi',0)*100:.1f}%</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Photo + stat strip ────────────────────────────────────────────────────
+    xs     = p.get("xstats",{})
+    splits = p.get("splits",{})
+    ph     = p["pitcher_hand"]
+    split  = splits.get("vl" if ph=="L" else "vr", {})
+
+    def _sv(d, k, fmt=".3f"):
+        v = _safe_float(d, k) or _safe_float(split, k)
+        return format(v, fmt).lstrip("0") if v else "—"
+
+    ba_v   = _sv(xs,"ba") or _sv(split,"avg")
+    obp_v  = _sv(xs,"obp") or _sv(split,"obp")
+    slg_v  = _sv(xs,"slg") or _sv(split,"slg")
+    ops_v  = (f"{((_safe_float(xs,'obp') or _safe_float(split,'obp') or 0) + (_safe_float(xs,'slg') or _safe_float(split,'slg') or 0)):.3f}".lstrip("0")) or "—"
+
+    col_photo, col_stats = st.columns([1, 3])
+    with col_photo:
+        st.markdown(f"""
+<div style="background:#eff6ff;border-radius:8px;padding:12px;text-align:center;
+            border:1px solid #e2e8f0;margin-top:8px">
+  <img src="{photo}" style="width:90px;height:90px;border-radius:50%;
+       object-fit:cover;border:3px solid #2563eb" onerror="this.style.display='none'"/>
+</div>""", unsafe_allow_html=True)
+
+    with col_stats:
+        st.markdown(f"""
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">
+  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
+    <div style="font-size:10px;color:#64748b;font-weight:700">BA</div>
+    <div style="font-size:22px;font-weight:800;color:#2563eb">{ba_v}</div>
+  </div>
+  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
+    <div style="font-size:10px;color:#64748b;font-weight:700">OBP</div>
+    <div style="font-size:22px;font-weight:800;color:#2563eb">{obp_v}</div>
+  </div>
+  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
+    <div style="font-size:10px;color:#64748b;font-weight:700">SLG</div>
+    <div style="font-size:22px;font-weight:800;color:#2563eb">{slg_v}</div>
+  </div>
+  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
+    <div style="font-size:10px;color:#64748b;font-weight:700">OPS</div>
+    <div style="font-size:22px;font-weight:800;color:#2563eb">{ops_v}</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    st.write("")
+
+    # ── Period filter + handedness ─────────────────────────────────────────────
+    fc1, fc2 = st.columns([1, 1])
+    with fc1:
+        st.markdown('<div style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:.06em;margin-bottom:6px">VS PITCHER HANDEDNESS</div>', unsafe_allow_html=True)
+        hand_sel = st.radio("hand", ["← VS LHP","ALL","VS RHP →"],
+                            index=1, horizontal=True, label_visibility="collapsed",
+                            key="modal_hand")
+    with fc2:
+        st.markdown('<div style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:.06em;margin-bottom:6px">PERIOD FILTER (HISTOGRAM)</div>', unsafe_allow_html=True)
+        period = st.radio("period", ["LAST 5","LAST 10","LAST 20","THIS SEASON"],
+                          index=1, horizontal=True, label_visibility="collapsed",
+                          key="modal_period")
+
+    # ── Bar chart: filter by period ───────────────────────────────────────────
+    gl_full = p.get("game_log", [])
+    n_map   = {"LAST 5":5,"LAST 10":10,"LAST 20":20,"THIS SEASON":len(gl_full)}
+    gl      = gl_full[:n_map.get(period, 10)]
+
+    # Filter by handedness if split data is available (approximate: show all)
+    st.markdown('<div style="font-size:13px;font-weight:700;color:#1e293b;margin:4px 0">HITS &amp; HR &mdash; {}</div>'.format(period), unsafe_allow_html=True)
+    if gl:
+        st.plotly_chart(game_log_chart(gl), use_container_width=True,
+                        config={"displayModeBar":False})
+    else:
+        st.caption("No game log data.")
 
     st.divider()
-    tab_stats, tab_form, tab_breakdown = st.tabs(["Advanced Stats", "Last 10 Games", "Probability Breakdown"])
 
-    with tab_stats:
-        xs    = p.get("xstats",{})
-        splits= p.get("splits",{})
-        ph    = p["pitcher_hand"]
-        split = splits.get("vl" if ph=="L" else "vr", {})
+    # ── Pitcher info + probability breakdown ──────────────────────────────────
+    tab_pitcher, tab_breakdown = st.tabs(["Opposing Pitcher", "Probability Breakdown"])
 
-        def _fmt(d, k, fmt=".3f"):
-            v = _safe_float(d, k)
-            return format(v, fmt) if v is not None else "—"
-
-        mc = st.columns(5)
-        ba_val   = _fmt(xs,"ba") if _fmt(xs,"ba")!="—" else _fmt(split,"avg")
-        barrel_v = (_fmt(xs,"barrel_pct",".1f")+"%" if _fmt(xs,"barrel_pct",".1f")!="—" else "—")
-        ev_v     = (_fmt(xs,"exit_velo",".1f")+" mph" if _fmt(xs,"exit_velo",".1f")!="—" else "—")
-        mc[0].metric("BA",       ba_val,           delta="lg .248")
-        mc[1].metric("xBA",      _fmt(xs,"xba"),   delta="lg .248")
-        mc[2].metric("xSLG",     _fmt(xs,"xslg"),  delta="lg .411")
-        mc[3].metric("Barrel%",  barrel_v,          delta="lg 8.0%")
-        mc[4].metric("Exit Velo",ev_v,              delta="lg 88.5 mph")
-
-        if split.get("pa",0) >= 1:
-            st.markdown(f"**vs {'LHP' if ph=='L' else 'RHP'} splits**")
-            sc = st.columns(5)
-            sc[0].metric("AVG", split.get("avg","—"))
-            sc[1].metric("SLG", split.get("slg","—"))
-            sc[2].metric("OPS", split.get("ops","—"))
-            sc[3].metric("HR",  f"{split.get('hr',0)}")
-            sc[4].metric("PA",  f"{split.get('pa',0)}")
-
-        st.plotly_chart(advanced_stats_chart(xs, splits, ph),
-                        use_container_width=True, config={"displayModeBar":False})
-
+    with tab_pitcher:
         pstats = p.get("pitcher_stats",{})
-        st.markdown(f"**Opposing Pitcher: {p['pitcher']}** ({hand_lbl})")
-        pc = st.columns(4)
         def _pf(k, fmt=".2f"):
             v = pstats.get(k)
-            return format(v, fmt) if isinstance(v, float) else "—"
-        pc[0].metric("ERA",      _pf("era"))
-        pc[1].metric("WHIP",     _pf("whip"))
-        pc[2].metric("Opp AVG",  _pf("avg_against",".3f"))
-        pc[3].metric("HR/9",     _pf("hr_per_9"))
-        if pstats.get("l5_avg_against") is not None:
-            parts = [f"Opp AVG: **{pstats['l5_avg_against']:.3f}**"]
-            if pstats.get("l5_hr_per_9") is not None:
-                parts.append(f"HR/9: **{pstats['l5_hr_per_9']:.2f}**")
-            if pstats.get("l5_era") is not None:
-                parts.append(f"ERA: **{pstats['l5_era']:.2f}**")
-            st.caption("Last 5 starts — " + " · ".join(parts))
+            return format(v, fmt) if isinstance(v,(int,float)) else "—"
+        pc = st.columns(4)
+        pc[0].metric("ERA",     _pf("era"))
+        pc[1].metric("WHIP",    _pf("whip"))
+        pc[2].metric("Opp AVG", _pf("avg_against",".3f"))
+        pc[3].metric("K/9",     _pf("k_per_9"))
 
-    with tab_form:
-        gl = p.get("game_log",[])
-        if gl:
-            st.plotly_chart(game_log_chart(gl), use_container_width=True, config={"displayModeBar":False})
-            df_gl = pd.DataFrame(gl)
-            ab_t=df_gl["ab"].sum(); h_t=df_gl["h"].sum(); hr_t=df_gl["hr"].sum()
-            sc2 = st.columns(4)
-            sc2[0].metric("H/AB",  f"{h_t}/{ab_t}  ({h_t/max(ab_t,1):.3f})")
-            sc2[1].metric("HR/AB", f"{hr_t}/{ab_t}  ({hr_t/max(ab_t,1):.3f})")
-            sc2[2].metric("RBI",   int(df_gl["rbi"].sum()))
-            sc2[3].metric("K",     int(df_gl["k"].sum()))
-
-            df_gl["H/AB"]  = df_gl.apply(lambda r: f"{r['h']}/{r['ab']}", axis=1)
-            df_gl["HR/AB"] = df_gl.apply(lambda r: f"{r['hr']}/{r['ab']}", axis=1)
-            show = ["date","opp","H/AB","HR/AB","2b","3b","rbi","bb","k"]
-            show = [c for c in show if c in df_gl.columns]
-            disp = df_gl[show].copy()
-            disp.columns = [c.upper() for c in disp.columns]
-            st.dataframe(disp, use_container_width=True, hide_index=True)
-        else:
-            st.caption("No game log available.")
+        xs_chart = p.get("xstats",{})
+        barrel_v = (_safe_float(xs_chart,"barrel_pct") or 0)
+        ev_v     = (_safe_float(xs_chart,"exit_velo") or 0)
+        mc = st.columns(3)
+        mc[0].metric("xBA",     format(_safe_float(xs_chart,"xba") or 0,".3f"))
+        mc[1].metric("Barrel%", f"{barrel_v:.1f}%")
+        mc[2].metric("Exit Velo", f"{ev_v:.1f} mph")
 
     with tab_breakdown:
-        st.caption("Bars show how each factor raises (+) or lowers (−) the probability in logit units.")
-        hc  = {k:v for k,v in p["hit_contributions"].items() if not k.startswith("_")}
-        hrc = {k:v for k,v in p["hr_contributions"].items() if not k.startswith("_")}
+        st.caption("Bars show how each factor raises (+) or lowers (−) hit/HR probability.")
+        hc  = {k:v for k,v in p["hit_contributions"].items()  if not k.startswith("_")}
+        hrc = {k:v for k,v in p["hr_contributions"].items()   if not k.startswith("_")}
         st.plotly_chart(waterfall_chart(hc,  "Hit Probability Drivers"),
                         use_container_width=True, config={"displayModeBar":False})
         st.plotly_chart(waterfall_chart(hrc, "HR Probability Drivers"),
@@ -1356,58 +1530,15 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    # ── Player table ───────────────────────────────────────────────────────────
-    st.caption("◦ = roster fallback · lineup not yet confirmed")
-    rows = []
-    for p in projs:
-        xs    = p.get("xstats",{})
-        split = p.get("splits",{}).get("vl" if p["pitcher_hand"]=="L" else "vr",{})
-        def _xs(k, fmt=".3f"):
-            v = _safe_float(xs, k)
-            return format(v, fmt) if v is not None else "—"
-        def _sp(k, fmt=".3f"):
-            v = _safe_float(split, k)
-            return format(v, fmt) if v is not None else "—"
-        hl  = "L" if p["pitcher_hand"]=="L" else "R"
-        spot = p.get("lineup_spot",0)
-        rows.append({
-            "#":           spot if spot else "—",
-            "Player":      p["player"] + ("" if p.get("confirmed") else " ◦"),
-            "Team":        TEAM_ABBREV.get(p["team"], p["team"][:3]),
-            "vs Pitcher":  f"{p['pitcher'][:18]} ({hl})",
-            "P(Hit)":      f"{p['p_hit']*100:.1f}%",
-            "P(HR)":       f"{p['p_hr']*100:.1f}%",
-            "BA split":    _sp("avg"),
-            "xBA":         _xs("xba"),
-            "xSLG":        _xs("xslg"),
-            "Venue":       p["venue"][:20],
-            "Key Factors": top_factors(p["hit_contributions"], p["hr_contributions"]),
-        })
+    # ── Player table (custom HTML) ────────────────────────────────────────────
+    st.caption("◦ = roster fallback · lineup not yet confirmed · click player name to open detail")
+    st.markdown(render_player_table(projs, sel_game), unsafe_allow_html=True)
 
-    st.dataframe(
-        pd.DataFrame(rows),
-        use_container_width=True,
-        hide_index=True,
-        height=min(700, 40 + 52 * len(rows)),
-        column_config={
-            "#":           st.column_config.TextColumn("#", width="small"),
-            "Key Factors": st.column_config.TextColumn("Key Factors", width="large"),
-        },
-    )
-
-    # ── Player detail modal ────────────────────────────────────────────────────
-    st.write("")
-    col_sel, col_btn = st.columns([5, 1])
-    with col_sel:
-        sel = st.selectbox("Select a player for detailed breakdown",
-                           ["— select —"] + [p["player"] for p in projs])
-    with col_btn:
-        st.write(""); st.write("")
-        open_modal = st.button("View Detail", type="primary", disabled=(sel=="— select —"),
-                               use_container_width=True)
-
-    if open_modal and sel != "— select —":
-        show_player_modal(sel, data["projections"])
+    # ── Player modal — triggered by ?player=NAME query param ──────────────────
+    sel_player = st.query_params.get("player", "")
+    if sel_player:
+        decoded = urllib.parse.unquote_plus(sel_player)
+        show_player_modal(decoded, data["projections"])
 
     st.markdown("</div>", unsafe_allow_html=True)
 
