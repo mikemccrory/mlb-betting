@@ -1211,7 +1211,7 @@ def render_player_table(projs: List[Dict], sel_game: str) -> str:
         hr_yr  = p.get("hr_this_year","—")
         hr_l10 = p.get("hr_last10")
         rows.append(f"""<tr {TR}>
-<td style="padding:10px 10px"><a href="{link}" style="color:#2563eb;font-weight:700;text-decoration:none">{p['player']}</a>{conf}</td>
+<td style="padding:10px 10px"><a href="{link}" target="_self" style="color:#2563eb;font-weight:700;text-decoration:none">{p['player']}</a>{conf}</td>
 <td style="padding:10px 10px;color:#475569">{p['team']}</td>
 <td style="padding:10px 10px">{p['pitcher'][:22]}<br>{badge}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hit'],'green')}</td>
@@ -1412,7 +1412,7 @@ def show_player_modal(player_name: str, projections: List[Dict]):
 # ── Game filter bar HTML ──────────────────────────────────────────────────────
 def _game_bar_html(live_games: List[Dict], sel: str) -> str:
     all_cls = "gb-all" if sel == "all" else "gb-all inactive"
-    html = f'<div class="game-bar"><a href="?game=all" class="{all_cls}">ALL GAMES</a>'
+    html = f'<div class="game-bar"><a href="?game=all" class="{all_cls}" target="_self">ALL GAMES</a>'
     for g in live_games:
         ha = g["away_abbrev"]; hh = g["home_abbrev"]
         gid = str(g["game_id"])
@@ -1434,7 +1434,7 @@ def _game_bar_html(live_games: List[Dict], sel: str) -> str:
                 sub = "TBD"
             status = f'<div class="gc-status">{sub}</div>'
             r1     = ha; r2 = hh
-        html += (f'<a href="?game={gid}" class="game-card {active}">'
+        html += (f'<a href="?game={gid}" class="game-card {active}" target="_self">'
                  f'{status}'
                  f'<div class="gc-row">{r1}</div>'
                  f'<div class="gc-row">{r2}</div>'
