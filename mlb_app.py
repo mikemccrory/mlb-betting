@@ -39,46 +39,84 @@ st.set_page_config(
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  /* ── Light theme base ──────────────────────────────────────── */
-  [data-testid="stAppViewContainer"] { background:#eef2f7; }
-  [data-testid="stHeader"]           { background:transparent; display:none; }
-  [data-testid="stToolbar"]          { display:none; }
-  h1,h2,h3,h4 { color:#1e293b !important; }
-
-  /* Remove default streamlit top padding so nav sits flush */
-  .block-container {
-    padding-top: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    padding-bottom: 2rem !important;
-    max-width: 100% !important;
+  /* ── Design tokens (light mode defaults) ────────────────────── */
+  :root {
+    --bg:        #eef2f7;
+    --surface:   #ffffff;
+    --surface2:  #f8fafc;
+    --border:    #e2e8f0;
+    --text:      #1e293b;
+    --text2:     #475569;
+    --muted:     #94a3b8;
+    --hover-row: #eff6ff;
+    --inp:       #ffffff;
+    --gc-i-bg:   #f1f5f9;
+    --gc-i-col:  #475569;
+    --shadow:    0 1px 4px rgba(0,0,0,.08);
+    --grid:      rgba(148,163,184,.30);
   }
 
-  /* ── Nav bar ────────────────────────────────────────────────── */
+  /* ── Dark mode overrides ─────────────────────────────────────── */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0f172a;
+      --surface:   #1e293b;
+      --surface2:  #0f172a;
+      --border:    #334155;
+      --text:      #f1f5f9;
+      --text2:     #cbd5e1;
+      --muted:     #64748b;
+      --hover-row: #1e3a5f;
+      --inp:       #0f172a;
+      --gc-i-bg:   #334155;
+      --gc-i-col:  #94a3b8;
+      --shadow:    0 1px 4px rgba(0,0,0,.4);
+      --grid:      rgba(148,163,184,.15);
+    }
+  }
+
+  /* ── Streamlit base ──────────────────────────────────────────── */
+  [data-testid="stAppViewContainer"] { background: var(--bg) !important; }
+  [data-testid="stHeader"]           { background: transparent; display: none; }
+  [data-testid="stToolbar"]          { display: none; }
+  h1,h2,h3,h4 { color: var(--text) !important; }
+  p { color: var(--text2); }
+
+  .block-container {
+    padding-top:    0 !important;
+    padding-left:   0 !important;
+    padding-right:  0 !important;
+    padding-bottom: 2rem !important;
+    max-width:      100% !important;
+  }
+
+  /* ── Nav bar ─────────────────────────────────────────────────── */
   .mlb-nav {
     background: #1d3461;
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 16px;
     height: 52px;
-    gap: 0;
+    gap: 4px;
     position: sticky;
     top: 0;
     z-index: 999;
   }
   .mlb-nav-links { display: flex; gap: 4px; }
   .mlb-nav-links a {
-    color: rgba(255,255,255,.75);
+    color: rgba(255,255,255,.80);
     text-decoration: none;
     font-size: 13px;
     font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 6px;
+    padding: 5px 13px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,.25);
     letter-spacing: .04em;
+    white-space: nowrap;
     transition: background .15s, color .15s;
   }
   .mlb-nav-links a.active,
-  .mlb-nav-links a:hover { background: rgba(255,255,255,.15); color: #fff; }
+  .mlb-nav-links a:hover { background: rgba(255,255,255,.18); color: #fff; }
   .mlb-nav-brand {
     flex: 1;
     text-align: center;
@@ -90,27 +128,22 @@ st.markdown("""
   }
   .mlb-nav-search {
     background: rgba(255,255,255,.12);
-    border: 1px solid rgba(255,255,255,.2);
+    border: 1px solid rgba(255,255,255,.20);
     border-radius: 20px;
     padding: 6px 14px;
     display: flex;
     align-items: center;
     gap: 7px;
-    color: rgba(255,255,255,.5);
+    color: rgba(255,255,255,.50);
     font-size: 12px;
     min-width: 180px;
     cursor: text;
   }
-  @media (max-width: 640px) {
-    .mlb-nav-links { display: none; }
-    .mlb-nav-search { min-width: 120px; font-size: 11px; }
-    .mlb-nav-brand { font-size: 14px; }
-  }
 
-  /* ── Game filter bar ────────────────────────────────────────── */
+  /* ── Game filter bar ─────────────────────────────────────────── */
   .game-bar {
-    background: white;
-    border-bottom: 1px solid #e2e8f0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -119,12 +152,12 @@ st.markdown("""
     -webkit-overflow-scrolling: touch;
   }
   .game-bar::-webkit-scrollbar { height: 3px; }
-  .game-bar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+  .game-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
   .gb-all {
     flex-shrink: 0;
     background: #2563eb;
-    color: white;
+    color: white !important;
     border: none;
     border-radius: 6px;
     padding: 8px 16px;
@@ -135,19 +168,18 @@ st.markdown("""
     white-space: nowrap;
   }
   .gb-all.inactive {
-    background: #f1f5f9;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    background: var(--gc-i-bg);
+    color: var(--gc-i-col) !important;
+    border: 1px solid var(--border);
   }
-
   .game-card {
     flex-shrink: 0;
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 7px 10px;
     text-decoration: none;
-    color: #1e293b;
+    color: var(--text);
     min-width: 72px;
     transition: border-color .15s, box-shadow .15s;
     line-height: 1.4;
@@ -156,75 +188,96 @@ st.markdown("""
   .game-card.active {
     border-color: #2563eb;
     box-shadow: 0 0 0 1px #2563eb;
-    background: #eff6ff;
+    background: rgba(37,99,235,.10);
   }
-  .gc-status { font-size: 9px; color: #94a3b8; font-weight: 700; letter-spacing:.05em; }
-  .gc-live   { font-size: 9px; color: #ef4444; font-weight: 700; letter-spacing:.05em; }
-  .gc-row    { font-size: 12px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+  .gc-status { font-size: 9px; color: var(--muted); font-weight: 700; letter-spacing:.05em; }
+  .gc-live   { font-size: 9px; color: #ef4444;     font-weight: 700; letter-spacing:.05em; }
+  .gc-row    { font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
 
-  /* ── Content wrapper (adds side padding back) ────────────────── */
+  /* ── Content padding ─────────────────────────────────────────── */
   .content-pad { padding: 16px 20px; }
 
-  /* ── Metric cards ───────────────────────────────────────────── */
+  /* ── Metric cards ────────────────────────────────────────────── */
   div[data-testid="metric-container"] {
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 10px;
     padding: 12px 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: var(--shadow);
   }
-  [data-testid="metric-container"] label { color: #64748b !important; font-size: 12px !important; }
-  [data-testid="metric-container"] [data-testid="stMetricValue"] { color: #1e293b !important; }
+  [data-testid="metric-container"] label
+    { color: var(--muted) !important; font-size: 12px !important; }
+  [data-testid="metric-container"] [data-testid="stMetricValue"]
+    { color: var(--text) !important; }
 
-  /* ── Tabs ───────────────────────────────────────────────────── */
+  /* ── Tabs ────────────────────────────────────────────────────── */
   .stTabs [data-baseweb="tab-list"] {
     overflow-x: auto; flex-wrap: nowrap; gap: 6px;
     -webkit-overflow-scrolling: touch;
     background: transparent !important;
   }
   .stTabs [data-baseweb="tab"] {
-    background: white; border-radius: 8px; color: #64748b;
-    padding: 6px 14px; border: 1px solid #e2e8f0;
+    background: var(--surface) !important;
+    border-radius: 8px;
+    color: var(--muted) !important;
+    padding: 6px 14px;
+    border: 1px solid var(--border) !important;
     font-size: 13px;
   }
   .stTabs [aria-selected="true"] {
-    background: #2563eb !important; color: #fff !important;
+    background: #2563eb !important;
+    color: #fff !important;
     border-color: #2563eb !important;
   }
 
-  /* ── Buttons ────────────────────────────────────────────────── */
+  /* ── Buttons ─────────────────────────────────────────────────── */
   .stButton>button {
-    background: white; color: #374151; border: 1px solid #e2e8f0;
-    border-radius: 8px; padding: 6px 14px; font-size: 13px;
-    min-height: 40px; touch-action: manipulation;
-    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    background: var(--surface) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    min-height: 40px;
+    touch-action: manipulation;
+    box-shadow: var(--shadow);
   }
-  .stButton>button:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .stButton>button[kind="primary"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .stButton>button:hover
+    { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
+  .stButton>button[kind="primary"]
+    { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
 
-  /* ── Form controls ──────────────────────────────────────────── */
-  label { color: #64748b !important; }
-  .stSelectbox>div>div   { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
-  .stTextInput>div>div   { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
-  .stMultiSelect>div>div { background: white !important; color: #1e293b !important; border-color: #e2e8f0 !important; }
-
-  /* ── Data table ─────────────────────────────────────────────── */
-  [data-testid="stDataFrame"] {
-    border-radius: 10px; overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  /* ── Form controls ───────────────────────────────────────────── */
+  label { color: var(--muted) !important; }
+  .stSelectbox>div>div,
+  .stTextInput>div>div,
+  .stMultiSelect>div>div {
+    background: var(--inp) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
   }
+  .stRadio label { color: var(--text2) !important; }
 
-  /* ── Alert / info banners ───────────────────────────────────── */
+  /* ── Alerts ──────────────────────────────────────────────────── */
   [data-testid="stAlert"] { border-radius: 8px; }
+  [data-testid="stCaptionContainer"] { color: var(--muted) !important; }
 
-  /* ── Mobile overrides (≤ 640 px) ───────────────────────────── */
+  /* ── Player table row hover (CSS class, no inline JS) ────────── */
+  .player-tbl tbody tr { cursor: pointer; }
+  .player-tbl tbody tr:hover { background: var(--hover-row) !important; }
+
+  /* ── Mobile (≤ 640 px) ───────────────────────────────────────── */
   @media screen and (max-width: 640px) {
-    .content-pad { padding: 12px 12px; }
+    .content-pad { padding: 10px 10px; }
+    .mlb-nav-links  { display: none; }
+    .mlb-nav-search { min-width: 100px; font-size: 11px; }
+    .mlb-nav-brand  { font-size: 14px; }
 
+    /* Stack all columns */
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .5rem 0 !important; }
-    [data-testid="column"] { min-width: 100% !important; }
+    [data-testid="column"]            { min-width: 100% !important; }
 
-    /* Metric 2-up */
+    /* Metric cards 2-up */
     div[data-testid="metric-container"] { padding: 8px 10px !important; }
     [data-testid="stHorizontalBlock"]:has([data-testid="metric-container"]) [data-testid="column"] {
       min-width: calc(50% - .25rem) !important;
@@ -237,13 +290,25 @@ st.markdown("""
       min-width: 100% !important;
     }
 
-    /* Bigger touch targets on buttons */
+    /* Touch targets */
     .stButton>button { min-height: 44px !important; font-size: 14px !important; }
 
-    /* Scrollable dataframe */
-    [data-testid="stDataFrame"] { overflow-x: auto !important; }
+    /* Sticky player name column */
+    .player-tbl td:first-child,
+    .player-tbl th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: var(--surface);
+      box-shadow: 2px 0 4px rgba(0,0,0,.08);
+    }
+    .player-tbl th:first-child { background: #1e293b; }
 
-    /* Heading sizes */
+    /* Modal prob metrics 2×2 grid */
+    .prob-grid { grid-template-columns: 1fr 1fr !important; }
+    /* Modal stat strip 2×2 grid */
+    .stat-grid { grid-template-columns: 1fr 1fr !important; }
+
     h1 { font-size: 1.4rem !important; }
     h2 { font-size: 1.2rem !important; }
   }
@@ -1094,7 +1159,8 @@ def run_analysis(date_str: str) -> Dict:
             "model_info": model_info}
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
-DARK = dict(paper_bgcolor="white", plot_bgcolor="#f8fafc", font_color="#334155")
+DARK = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#94a3b8")
+_GRID = "rgba(148,163,184,.22)"
 
 def waterfall_chart(contribs: Dict, title: str) -> go.Figure:
     items = {k:v for k,v in contribs.items()
@@ -1114,7 +1180,7 @@ def waterfall_chart(contribs: Dict, title: str) -> go.Figure:
         **DARK, title_text=title, title_font_color="#64748b", title_font_size=12,
         height=max(200, 32*len(labels)+60),
         margin=dict(l=10, r=70, t=36, b=10),
-        xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zeroline=True, zerolinecolor="#94a3b8"),
+        xaxis=dict(showgrid=True, gridcolor=_GRID, zeroline=True, zerolinecolor=_GRID),
         yaxis=dict(showgrid=False, automargin=True),
     )
     return fig
@@ -1152,7 +1218,7 @@ def advanced_stats_chart(xstats: Dict, splits: Dict, pitcher_hand: str) -> go.Fi
     fig.update_layout(
         **DARK, height=260, margin=dict(l=0,r=0,t=10,b=0),
         barmode="group", legend=dict(font_color="#64748b"),
-        yaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
+        yaxis=dict(showgrid=True, gridcolor=_GRID),
     )
     return fig
 
@@ -1178,7 +1244,7 @@ def game_log_chart(gl: List[Dict]) -> go.Figure:
         **DARK, height=220, margin=dict(l=0,r=0,t=10,b=55),
         barmode="group", legend=dict(font_color="#64748b"),
         xaxis=dict(type="category", tickangle=-35, tickfont_size=10),
-        yaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
+        yaxis=dict(showgrid=True, gridcolor=_GRID),
     )
     return fig
 
@@ -1206,9 +1272,7 @@ def render_player_table(projs: List[Dict], sel_game: str, sort_col: int = 3) -> 
         s = format(float(v), fmt)
         return s.lstrip("0") or "0"
 
-    TR = ('style="border-bottom:1px solid #f1f5f9;cursor:pointer" '
-          'onmouseover="this.style.background=\'#eff6ff\'" '
-          'onmouseout="this.style.background=\'\'"')
+    TR = 'style="border-bottom:1px solid var(--border)"'
 
     rows = []
     for p in projs:
@@ -1220,16 +1284,16 @@ def render_player_table(projs: List[Dict], sel_game: str, sort_col: int = 3) -> 
         hr_l10 = p.get("hr_last10")
         rows.append(f"""<tr {TR}>
 <td style="padding:10px 10px"><a href="{link}" target="_self" style="color:#2563eb;font-weight:700;text-decoration:none">{p['player']}</a>{conf}</td>
-<td style="padding:10px 10px;color:#475569">{p['team']}</td>
-<td style="padding:10px 10px">{p['pitcher'][:22]}<br>{badge}</td>
+<td style="padding:10px 10px;color:var(--text2)">{p['team']}</td>
+<td style="padding:10px 10px;color:var(--text)">{p['pitcher'][:22]}<br>{badge}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hit'],'green')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_pct(p['p_hr'],'orange')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_season'),'blue')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_last10'),'orange')}</td>
-<td style="padding:10px 10px;text-align:right;color:#475569">{_plain(p.get('obp'))}</td>
-<td style="padding:10px 10px;text-align:right;color:#475569">{_plain(p.get('slg'))}</td>
-<td style="padding:10px 10px;text-align:center;color:#475569">{hr_yr}</td>
-<td style="padding:10px 10px;text-align:center;color:#475569">{hr_l10 if hr_l10 is not None else '<span style="color:#94a3b8">—</span>'}</td>
+<td style="padding:10px 10px;text-align:right;color:var(--text2)">{_plain(p.get('obp'))}</td>
+<td style="padding:10px 10px;text-align:right;color:var(--text2)">{_plain(p.get('slg'))}</td>
+<td style="padding:10px 10px;text-align:center;color:var(--text2)">{hr_yr}</td>
+<td style="padding:10px 10px;text-align:center;color:var(--text2)">{hr_l10 if hr_l10 is not None else '<span style="color:var(--muted)">—</span>'}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_left'),'blue')}</td>
 <td style="padding:10px 10px;text-align:right">{_fmt_ba(p.get('ba_vs_right'),'orange')}</td>
 </tr>""")
@@ -1260,14 +1324,14 @@ def render_player_table(projs: List[Dict], sel_game: str, sort_col: int = 3) -> 
         ths += f'<th style="{TH_BASE}text-align:{align};{bg}">{label}</th>'
 
     return f"""
-<div style="background:white;border-radius:10px;overflow:hidden;
-            box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:12px">
+<div style="background:var(--surface);border-radius:10px;overflow:hidden;
+            box-shadow:var(--shadow);margin-top:12px">
   <div style="background:#2563eb;color:white;font-size:11px;font-weight:700;
               padding:10px 14px;letter-spacing:.06em">
     TABLE OF PLAYERS &mdash; DEFAULT SORT: PROBABILITY OF HIT
   </div>
   <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table class="player-tbl" style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:#1e293b">{ths}</tr></thead>
       <tbody>{''.join(rows)}</tbody>
     </table>
@@ -1296,22 +1360,22 @@ def show_player_modal(player_name: str, projections: List[Dict]):
 
     # ── 4 Probability metrics ─────────────────────────────────────────────────
     st.markdown(f"""
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
-            border:1px solid #e2e8f0;border-top:none;border-radius:0 0 0 0">
-  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
-    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(HIT)</div>
+<div class="prob-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+            border:1px solid var(--border);border-top:none">
+  <div style="padding:14px 10px;border-right:1px solid var(--border);text-align:center">
+    <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em">P(HIT)</div>
     <div style="font-size:26px;font-weight:800;color:#22c55e">{p['p_hit']*100:.1f}%</div>
   </div>
-  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
-    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(HR)</div>
+  <div style="padding:14px 10px;border-right:1px solid var(--border);text-align:center">
+    <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em">P(HR)</div>
     <div style="font-size:26px;font-weight:800;color:#f97316">{p['p_hr']*100:.1f}%</div>
   </div>
-  <div style="padding:14px 16px;border-right:1px solid #e2e8f0;text-align:center">
-    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(TB 2.5+)</div>
+  <div style="padding:14px 10px;border-right:1px solid var(--border);text-align:center">
+    <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em">P(TB 2.5+)</div>
     <div style="font-size:26px;font-weight:800;color:#a855f7">{p.get('p_tb',0)*100:.1f}%</div>
   </div>
-  <div style="padding:14px 16px;text-align:center">
-    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:.06em">P(RBI)</div>
+  <div style="padding:14px 10px;text-align:center">
+    <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em">P(RBI)</div>
     <div style="font-size:26px;font-weight:800;color:#f97316">{p.get('p_rbi',0)*100:.1f}%</div>
   </div>
 </div>""", unsafe_allow_html=True)
@@ -1334,29 +1398,29 @@ def show_player_modal(player_name: str, projections: List[Dict]):
     col_photo, col_stats = st.columns([1, 3])
     with col_photo:
         st.markdown(f"""
-<div style="background:#eff6ff;border-radius:8px;padding:12px;text-align:center;
-            border:1px solid #e2e8f0;margin-top:8px">
+<div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;
+            border:1px solid var(--border);margin-top:8px">
   <img src="{photo}" style="width:90px;height:90px;border-radius:50%;
        object-fit:cover;border:3px solid #2563eb" onerror="this.style.display='none'"/>
 </div>""", unsafe_allow_html=True)
 
     with col_stats:
         st.markdown(f"""
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">
-  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
-    <div style="font-size:10px;color:#64748b;font-weight:700">BA</div>
+<div class="stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">
+  <div style="background:var(--surface2);border-radius:8px;padding:12px 10px;text-align:center;border:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);font-weight:700">BA</div>
     <div style="font-size:22px;font-weight:800;color:#2563eb">{ba_v}</div>
   </div>
-  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
-    <div style="font-size:10px;color:#64748b;font-weight:700">OBP</div>
+  <div style="background:var(--surface2);border-radius:8px;padding:12px 10px;text-align:center;border:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);font-weight:700">OBP</div>
     <div style="font-size:22px;font-weight:800;color:#2563eb">{obp_v}</div>
   </div>
-  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
-    <div style="font-size:10px;color:#64748b;font-weight:700">SLG</div>
+  <div style="background:var(--surface2);border-radius:8px;padding:12px 10px;text-align:center;border:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);font-weight:700">SLG</div>
     <div style="font-size:22px;font-weight:800;color:#2563eb">{slg_v}</div>
   </div>
-  <div style="background:#f8fafc;border-radius:8px;padding:12px 10px;text-align:center;border:1px solid #e2e8f0">
-    <div style="font-size:10px;color:#64748b;font-weight:700">OPS</div>
+  <div style="background:var(--surface2);border-radius:8px;padding:12px 10px;text-align:center;border:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);font-weight:700">OPS</div>
     <div style="font-size:22px;font-weight:800;color:#2563eb">{ops_v}</div>
   </div>
 </div>""", unsafe_allow_html=True)
@@ -1366,12 +1430,12 @@ def show_player_modal(player_name: str, projections: List[Dict]):
     # ── Period filter + handedness ─────────────────────────────────────────────
     fc1, fc2 = st.columns([1, 1])
     with fc1:
-        st.markdown('<div style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:.06em;margin-bottom:6px">VS PITCHER HANDEDNESS</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;margin-bottom:6px">VS PITCHER HANDEDNESS</div>', unsafe_allow_html=True)
         hand_sel = st.radio("hand", ["← VS LHP","ALL","VS RHP →"],
                             index=1, horizontal=True, label_visibility="collapsed",
                             key="modal_hand")
     with fc2:
-        st.markdown('<div style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:.06em;margin-bottom:6px">PERIOD FILTER (HISTOGRAM)</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;margin-bottom:6px">PERIOD FILTER (HISTOGRAM)</div>', unsafe_allow_html=True)
         period = st.radio("period", ["LAST 5","LAST 10","LAST 20","THIS SEASON"],
                           index=1, horizontal=True, label_visibility="collapsed",
                           key="modal_period")
@@ -1382,7 +1446,7 @@ def show_player_modal(player_name: str, projections: List[Dict]):
     gl      = gl_full[:n_map.get(period, 10)]
 
     # Filter by handedness if split data is available (approximate: show all)
-    st.markdown('<div style="font-size:13px;font-weight:700;color:#1e293b;margin:4px 0">HITS &amp; HR &mdash; {}</div>'.format(period), unsafe_allow_html=True)
+    st.markdown('<div style="font-size:13px;font-weight:700;color:var(--text);margin:4px 0">HITS &amp; HR &mdash; {}</div>'.format(period), unsafe_allow_html=True)
     if gl:
         st.plotly_chart(game_log_chart(gl), use_container_width=True,
                         config={"displayModeBar":False})
